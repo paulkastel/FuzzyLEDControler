@@ -1,0 +1,92 @@
+FUNCTION_BLOCK DiodaLED_RGB
+
+VAR_INPUT
+  red: REAL;
+  green: REAL;
+  blue: REAL;
+END_VAR
+
+VAR_OUTPUT
+  lum: REAL;
+  ledcolor: REAL;
+END_VAR
+
+FUZZIFY red
+  ENABLED : TRUE;
+  RANGE := (0.000 .. 5.000);
+  TERM high := Ramp 0.000 5.000;
+  TERM mid := Triangle 0.000 2.500 5.000;
+  TERM low := Ramp 5.000 0.000;
+END_FUZZIFY
+
+FUZZIFY green
+  ENABLED : TRUE;
+  RANGE := (0.000 .. 5.000);
+  TERM high := Ramp 0.000 5.000;
+  TERM mid := Triangle 0.000 2.500 5.000;
+  TERM low := Ramp 5.000 0.000;
+END_FUZZIFY
+
+FUZZIFY blue
+  ENABLED : TRUE;
+  RANGE := (0.000 .. 5.000);
+  TERM high := Ramp 0.000 5.000;
+  TERM mid := Triangle 0.000 2.500 5.000;
+  TERM low := Ramp 5.000 0.000;
+END_FUZZIFY
+
+DEFUZZIFY lum
+  ENABLED : TRUE;
+  RANGE := (0.000 .. 600.000);
+  TERM max := Ramp 0.000 600.000;
+  METHOD : COGS;
+  ACCU : MAX;
+  DEFAULT := 0.000;
+END_DEFUZZIFY
+
+DEFUZZIFY ledcolor
+  ENABLED : TRUE;
+  RANGE := (-30.000 .. 440.000);
+  TERM red := Triangle -30.000 0.000 30.000;
+  TERM orange := Triangle 0.000 30.000 60.000;
+  TERM yellow := Triangle 30.000 60.000 90.000;
+  TERM lime := Triangle 60.000 90.000 120.000;
+  TERM green := Triangle 90.000 120.000 150.000;
+  TERM turq := Triangle 120.000 150.000 180.000;
+  TERM cyan := Triangle 150.000 180.000 210.000;
+  TERM ocean := Triangle 180.000 210.000 240.000;
+  TERM blue := Triangle 210.000 240.000 270.000;
+  TERM purple := Triangle 240.000 270.000 300.000;
+  TERM magenta := Triangle 270.000 300.000 330.000;
+  TERM rasp := Triangle 300.000 330.000 360.000;
+  TERM white := Trapezoid 360.000 370.000 440.000 440.000;
+  METHOD : COA;
+  ACCU : ASUM;
+  DEFAULT := nan;
+END_DEFUZZIFY
+
+RULEBLOCK 
+  ENABLED : TRUE;
+  AND : PROD;
+  OR : ASUM;
+  ACT : PROD;
+  RULE 1 : if red is high and green is low and blue is low then ledcolor is red
+  RULE 2 : if red is high and green is mid and blue is low then ledcolor is orange
+  RULE 3 : if red is high and green is high and blue is low then ledcolor is yellow
+  RULE 4 : if red is mid and green is high and blue is low then ledcolor is lime
+  RULE 5 : if red is low and green is high and blue is low then ledcolor is green
+  RULE 6 : if red is low and green is high and blue is mid then ledcolor is turq
+  RULE 7 : if red is low and green is high and blue is high then ledcolor is cyan
+  RULE 8 : if red is low and green is mid and blue is high then ledcolor is ocean
+  RULE 9 : if red is low and green is low and blue is high then ledcolor is blue
+  RULE 10 : if red is mid and green is low and blue is high then ledcolor is purple
+  RULE 11 : if red is high and green is low and blue is high then ledcolor is magenta
+  RULE 12 : if red is high and green is low and blue is mid then ledcolor is rasp
+  RULE 13 : if red is high and green is high and blue is high then ledcolor is white and lum is max
+  RULE 14 : if red is mid and green is mid and blue is mid then ledcolor is white
+  RULE 15 : if red is high then lum is max
+  RULE 16 : if green is high then lum is max
+  RULE 17 : if blue is high then lum is max
+END_RULEBLOCK
+
+END_FUNCTION_BLOCK
