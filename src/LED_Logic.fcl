@@ -42,6 +42,7 @@ DEFUZZIFY lum
   METHOD : COGS;
   ACCU : MAX;
   DEFAULT := 0.000;
+  LOCK : RANGE;
 END_DEFUZZIFY
 
 DEFUZZIFY ledcolor
@@ -68,7 +69,6 @@ END_DEFUZZIFY
 RULEBLOCK 
   ENABLED : TRUE;
   AND : PROD;
-  OR : ASUM;
   ACT : PROD;
   RULE 1 : if red is high and green is low and blue is low then ledcolor is red
   RULE 2 : if red is high and green is mid and blue is low then ledcolor is orange

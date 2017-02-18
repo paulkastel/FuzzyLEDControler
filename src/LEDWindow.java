@@ -1,4 +1,6 @@
+//Biblioteki
 
+import com.fazecast.jSerialComm.SerialPort;
 import com.fuzzylite.Engine;
 import com.fuzzylite.defuzzifier.Bisector;
 import com.fuzzylite.defuzzifier.WeightedAverage;
@@ -13,6 +15,7 @@ import com.fuzzylite.term.Triangle;
 import com.fuzzylite.variable.InputVariable;
 import com.fuzzylite.variable.OutputVariable;
 import java.awt.Color;
+import java.io.PrintWriter;
 import java.text.DecimalFormat;
 import javax.swing.*;
 
@@ -22,10 +25,12 @@ import javax.swing.*;
  * and open the template in the editor.
  */
 /**
+ * Logika rozmyta do sterowania diodą LED
  *
- * @author kastel
+ * @author pawel kastelik
  */
-public class LEDWindow extends javax.swing.JFrame {
+public class LEDWindow extends javax.swing.JFrame
+{
 
     Engine engine;
     InputVariable inRed;
@@ -33,21 +38,65 @@ public class LEDWindow extends javax.swing.JFrame {
     InputVariable inBlue;
     OutputVariable outlum;
     OutputVariable outColor;
+
+    /**
+     * Port RS
+     */
+    SerialPort port;
+    
+    /**
+     * Jezeli Arduino jest wpiete na COM3 to wysylaj dane
+     */
+    public Boolean isArduinoIn;
+    
+    //Wartości liczby
     public double redCol, greenCol, blueCol, lux;
 
     /**
-     * Creates new form NewJFrame
+     * Konstruktor okna. Inicjalizuje logikę rozmytą i dane
      */
-    public LEDWindow() {
+    public LEDWindow()
+    {
         initComponents();
         lux = redCol = greenCol = blueCol = 0;
         initFuzzy();
+        initArduino();
+        if (isArduinoIn)
+        {
+            sendToArduino(0, 0, 0);
+        }
+        this.setLocationRelativeTo(null); //okienko na środku ekranu
     }
 
-    private void initFuzzy() {
+    /**
+     * Wysyla dane na Serial Arduino w odpowiednio sformatowany sposob
+     * @param red wartosc koloru czerwonego
+     * @param green wartosc koloru zielonego
+     * @param blue wartosc koloru niebieskiego
+     */
+    private void sendToArduino(int red, int green, int blue)
+    {
+        PrintWriter output = new PrintWriter(port.getOutputStream());
+        //Sformatuj liczbe do trzycyfrowego formatu
+        String r = String.format("%03d", red);
+        String g = String.format("%03d", green);
+        String b = String.format("%03d", blue);
+        
+        output.println(r + g + b);
+        output.flush();
+        //System.err.println(r + g + b);
+    }
+
+    /**
+     * Funkcja inicjalizująca całą logikę rozmytą
+     */
+    private void initFuzzy()
+    {
+        //Silnik
         engine = new Engine();
         engine.setName("DiodaLED_RGB");
 
+        //Zmienna odpowiedzialna za napiecie wysyłane na diodę czerwoną 0-5V
         inRed = new InputVariable();
         inRed.setEnabled(true);
         inRed.setName("red");
@@ -57,6 +106,7 @@ public class LEDWindow extends javax.swing.JFrame {
         inRed.addTerm(new Ramp("low", 5.000, 0.000));
         engine.addInputVariable(inRed);
 
+        //Zmienna odpowiedzialna za napiecie wysyłane na diodę zieloną 0-5V
         inGreen = new InputVariable();
         inGreen.setEnabled(true);
         inGreen.setName("green");
@@ -66,6 +116,7 @@ public class LEDWindow extends javax.swing.JFrame {
         inGreen.addTerm(new Ramp("low", 5.000, 0.000));
         engine.addInputVariable(inGreen);
 
+        //Zmienna odpowiedzialna za napięcie wysyłane na diodę niebieską 0-5V
         inBlue = new InputVariable();
         inBlue.setEnabled(true);
         inBlue.setName("blue");
@@ -75,6 +126,7 @@ public class LEDWindow extends javax.swing.JFrame {
         inBlue.addTerm(new Ramp("low", 5.000, 0.000));
         engine.addInputVariable(inBlue);
 
+        //Zmienna odpowiedzialna za wyjście identyfikujące jasność diody
         outlum = new OutputVariable();
         outlum.setEnabled(true);
         outlum.setName("lum");
@@ -87,15 +139,16 @@ public class LEDWindow extends javax.swing.JFrame {
         outlum.addTerm(new Ramp("max", 0.000, 600.000));
         engine.addOutputVariable(outlum);
 
+        //Zmienna odpowiedzialna za wyjście identyfikujące kolor diody
         outColor = new OutputVariable();
         outColor.setEnabled(true);
         outColor.setName("ledcolor");
         outColor.setRange(-30.000, 440.000);
         outColor.fuzzyOutput().setAccumulation(new AlgebraicSum());
         outColor.setDefuzzifier(new Bisector(250000));
-        outColor.setDefaultValue(0);
-        outColor.setLockPreviousOutputValue(false);
+        outColor.setDefaultValue(Double.NaN);
         outColor.setLockOutputValueInRange(false);
+        outColor.setLockPreviousOutputValue(false);
         outColor.addTerm(new Triangle("red", -30.000, 0.000, 30.000));
         outColor.addTerm(new Triangle("orange", 0.000, 30.000, 60.000));
         outColor.addTerm(new Triangle("yellow", 30.000, 60.000, 90.000));
@@ -111,11 +164,12 @@ public class LEDWindow extends javax.swing.JFrame {
         outColor.addTerm(new Trapezoid("white", 360.000, 370.000, 440.000, 440.000));
         engine.addOutputVariable(outColor);
 
+        //Reguły
         RuleBlock ruleBlock = new RuleBlock();
         ruleBlock.setEnabled(true);
         ruleBlock.setName("");
         ruleBlock.setConjunction(new AlgebraicProduct());
-        ruleBlock.setDisjunction(new AlgebraicSum());
+        ruleBlock.setDisjunction(null);
         ruleBlock.setActivation(new AlgebraicProduct());
         ruleBlock.addRule(Rule.parse("if red is high and green is low and blue is low then ledcolor is red", engine));
         ruleBlock.addRule(Rule.parse("if red is high and green is mid and blue is low then ledcolor is orange", engine));
@@ -135,43 +189,126 @@ public class LEDWindow extends javax.swing.JFrame {
         ruleBlock.addRule(Rule.parse("if green is high then lum is max", engine));
         ruleBlock.addRule(Rule.parse("if blue is high then lum is max", engine));
         engine.addRuleBlock(ruleBlock);
-
     }
 
-    private void setAppColor() {
+    /**
+     * Funkcja inicjalizujaca poloczenie z Arduino i wyswietlajaca informacje czy
+     * urzadzenie jest czy go nie ma
+     */
+    private void initArduino()
+    {
+        //Początek z Arduino                
+        port = SerialPort.getCommPort("COM3"); //Jaki port
+        port.setComPortTimeouts(SerialPort.TIMEOUT_SCANNER, 0, 0);
+        
+        //Jezeli udalo sie otworzyc port COM3 to pokaz komunikat i ustaw flage
+        if (port.openPort())
+        {
+            JOptionPane.showMessageDialog(null, "Połączono z Arduino na COM3", "Sukces", JOptionPane.WARNING_MESSAGE);
+            isArduinoIn = true;
+        } else
+        {
+            isArduinoIn = false;
+            JOptionPane.showMessageDialog(null, "Nie wykryto urządzenia Arduino na COM3", "Brak urządzenia", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Funkcja ustawiająca kolor okna - Imituje kolor diody.
+     */
+    private void setAppColor()
+    {
+        //Każdy kolor może mieć 255 odcieni. 0V - 0 1V - 51 5V - 255
         int r = (int) (redCol * 51);
         int g = (int) (greenCol * 51);
         int b = (int) (blueCol * 51);
+        //Dioda led ma 600 milikandeli, kanał alfa imituje tą jasność od 0 do 255 * 0.425 = 600
         int a = (int) (lux * 0.425);
+        //Stworz nowy kolor o podanych z suwaków kolorów i niech jego kolor będzie kolorem okna
         Color RGB = new Color(r, g, b, a);
         this.getContentPane().setBackground(RGB);
         this.repaint();
+        
+        //Jezeli jest Arduino to zapodaj mu wartosc jaka ma byc na diodzie
+        if (isArduinoIn)
+        {
+            sendToArduino(r, g, b);
+        }
     }
 
-    private double valueChange(JSlider sld, JLabel lbl) {
+    /**
+     * Funkcja pobiera wartość ze slidera i wyświetla jego wartość w etykiecie
+     *
+     * @param sld slider z którego pobierana jest wartość
+     * @param lbl etykieta na której jest ta wartość wyświetlana
+     * @return wartość suwaka
+     */
+    private double valueChange(JSlider sld, JLabel lbl)
+    {
+        //Suwaki w Javie nie akceptują doubli. Więc są ustawione wartości 0-500 i podzielone przez 100
         double value = (double) sld.getValue() / 100;
         lbl.setText(String.valueOf(value) + " V");
         return value;
     }
 
-    private void fuzzyDoIt() {
+    /**
+     * Sprawdza nazwę i wyświetla ją na etykiecie
+     *
+     * @param deg pseudostopien okręgu
+     * @param l_val
+     * @param r_val
+     * @param l_name nazwa zakresu barwy z lewej
+     * @param r_name nazwa zakresu po prawej
+     */
+    private void checkName(double deg, double l_val, double r_val, String l_name, String r_name)
+    {
+        //Formater wyświetlanych wartości
+        DecimalFormat df = new DecimalFormat("#0.000");
+
+        //Jezeli stopień aktywacji zakresu po lewej jest wiekszy niz tego po prawej to wyswietl jego nazwę i stopień przynależności
+        if (deg > l_val && deg < r_val)
+        {
+            if (outColor.fuzzyOutput().activationDegree(outColor.getTerm(r_name)) > outColor.fuzzyOutput().activationDegree(outColor.getTerm(l_name)))
+            {
+                lblColor.setText(r_name + " " + df.format(outColor.fuzzyOutput().activationDegree(outColor.getTerm(r_name))));
+            } else
+            {
+                lblColor.setText(l_name + " " + df.format(outColor.fuzzyOutput().activationDegree(outColor.getTerm(l_name))));
+            }
+        }
+    }
+
+    /**
+     * Metoda pobierająca wartości z suwaków i wyświetlająca to co obliczy
+     * logika
+     */
+    private void fuzzyDoIt()
+    {
+        //Jezeli silnik nie wydala z obliczeniami to error
         StringBuilder status = new StringBuilder();
-        if (!engine.isReady(status)) {
+        if (!engine.isReady(status))
+        {
             throw new RuntimeException("Engine not ready. "
                     + "The following errors were encountered:\n" + status.toString());
         }
+        //wprowadz do silnika aktualne wartości z suwaków
         inBlue.setInputValue(blueCol);
         inGreen.setInputValue(greenCol);
         inRed.setInputValue(redCol);
 
+        //formatery liczb
         DecimalFormat df1 = new DecimalFormat("#0.0");
         DecimalFormat df2 = new DecimalFormat("#0.00");
+
+        //kalkuluj wartości w logice
         engine.process();
+
+        //ustaw stopień jasnosci i wyświetl go na etykiecie
         lblLux.setText(df1.format(outlum.getOutputValue()));
         lux = outlum.getOutputValue();
         lblDegree.setText(df2.format(outColor.getOutputValue()));
-        //lblColor.setText(df2.format(outColor.fuzzyOutput().activationDegree(outColor.getTerm("red"))));
 
+        //porownuje wszystkie zbiory i wyświetla nazwę z największym.
         checkName(outColor.getOutputValue(), -1, 30, "red", "orange");
         checkName(outColor.getOutputValue(), 30, 60, "orange", "yellow");
         checkName(outColor.getOutputValue(), 60, 90, "yellow", "lime");
@@ -184,19 +321,6 @@ public class LEDWindow extends javax.swing.JFrame {
         checkName(outColor.getOutputValue(), 270, 300, "purple", "rasp");
         checkName(outColor.getOutputValue(), 300, 330, "rasp", "magenta");
         checkName(outColor.getOutputValue(), 360, 420, "magenta", "white");
-    }
-
-    private void checkName(double deg, double l_val, double r_val, String l_name, String r_name) {
-
-        DecimalFormat df = new DecimalFormat("#0.000");
-
-        if (deg > l_val && deg < r_val) {
-            if (outColor.fuzzyOutput().activationDegree(outColor.getTerm(r_name)) > outColor.fuzzyOutput().activationDegree(outColor.getTerm(l_name))) {
-                lblColor.setText(r_name + " " + df.format(outColor.fuzzyOutput().activationDegree(outColor.getTerm(r_name))));
-            } else {
-                lblColor.setText(l_name + " " + df.format(outColor.fuzzyOutput().activationDegree(outColor.getTerm(l_name))));
-            }
-        }
     }
 
     /**
@@ -328,55 +452,80 @@ public class LEDWindow extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
+    /**
+     * Funkcja wywoływana gdy poruszany jest suwak niebieski
+     *
+     * @param evt
+     */
     private void slider_BlueStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_slider_BlueStateChanged
         blueCol = valueChange(slider_Blue, lblBlue);
         fuzzyDoIt();
         setAppColor();
     }//GEN-LAST:event_slider_BlueStateChanged
 
+    /**
+     * Funkcja jest wywoływana gdy poruszany jest suwak zielony
+     *
+     * @param evt
+     */
     private void slider_GreenStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_slider_GreenStateChanged
         greenCol = valueChange(slider_Green, lblGreen);
         fuzzyDoIt();
         setAppColor();
     }//GEN-LAST:event_slider_GreenStateChanged
 
+    /**
+     * Funkcja jest wywoływana gdy poruszany jest suwak czerwony
+     *
+     * @param evt
+     */
     private void slider_RedStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_slider_RedStateChanged
-        redCol = valueChange(slider_Red, lblRed);
-        fuzzyDoIt();
-        setAppColor();
+        redCol = valueChange(slider_Red, lblRed); //pobierz wartość suwaka
+        fuzzyDoIt(); //zaktualizuj dane i kalkukuj logikę
+        setAppColor(); //zmien kolor okna
     }//GEN-LAST:event_slider_RedStateChanged
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
+    public static void main(String args[])
+    {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
         /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
          * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
          */
-        try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
+        try
+        {
+            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels())
+            {
+                if ("Nimbus".equals(info.getName()))
+                {
                     javax.swing.UIManager.setLookAndFeel(info.getClassName());
                     break;
                 }
             }
-        } catch (ClassNotFoundException ex) {
+        } catch (ClassNotFoundException ex)
+        {
             java.util.logging.Logger.getLogger(LEDWindow.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
+        } catch (InstantiationException ex)
+        {
             java.util.logging.Logger.getLogger(LEDWindow.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
+        } catch (IllegalAccessException ex)
+        {
             java.util.logging.Logger.getLogger(LEDWindow.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
+        } catch (javax.swing.UnsupportedLookAndFeelException ex)
+        {
             java.util.logging.Logger.getLogger(LEDWindow.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
         //</editor-fold>
         //</editor-fold>
 
         /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
+        java.awt.EventQueue.invokeLater(new Runnable()
+        {
+            public void run()
+            {
                 new LEDWindow().setVisible(true);
             }
         });
